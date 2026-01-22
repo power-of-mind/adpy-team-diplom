@@ -172,12 +172,6 @@ def get_next_candidate_from_db(user_id, last_id=None):
     """
     Берет следующего кандидата из БД, исключая профили из like_dislike данного пользователя.
     Возвращает dict или None, если кандидат не найден.
-    Берет следующего кандидата из БД, исключая черный список. Должна возвращать
-    id - id кандидата, для записи в last_id
-    first_name - имя кандидата,
-    last_name - фамилия кандидата,
-    vk_link - ссылка на профиль кандидата,
-    photos - массив из 3 фотографий
     """
     with create_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -267,10 +261,6 @@ def add_to_status(user_id, last_id, status):
     user_id: VK id пользователя.
     last_id: VK id кандидата в таблице vk_profiles.
     status: 'like'|'dislike'.
-    Добавляет пользователя в избранное или черный список
-    user_id - id пользователя, который общается с ботом,
-    candidate_id - id кандидата, у которого меняется статус,
-    status - статус, например like/dislike
     """
 
     if not user_id:
@@ -354,9 +344,6 @@ def get_favorites(user_id):
     Возвращает список избранных профилей для пользователя user_id.
     Формат результата: [(first_name, last_name, profile_url), ...]
     Если пользователь не найден — возвращает пустой список.
-    Получает список избранных пользователей
-    Эти данные должны быть в формате списка с именами, фамилиями и ссылками
-    на их профили (например, [('Иван', 'Иванов', 'vk.com/ivanov')])
     """
     if not user_id:
         return []
@@ -392,10 +379,3 @@ def get_favorites(user_id):
                 favorites.append((first_name, last_name, url))
 
             return favorites
-def add_user_to_db(user_id):
-    """
-    Добавляет пользователя в БД, если его еще нет
-    get_user_info и get_top3_photos_by_likes из vk_bot_modules поможет получить
-    информацию из VK
-    """
-    pass
