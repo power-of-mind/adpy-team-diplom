@@ -1,11 +1,22 @@
-# main.py
+"""
+Главный модуль интеграционного VK Dating Bot.
+
+Отвечает за:
+- запуск бота и прослушивание событий через VK LongPoll;
+- обработку сообщений пользователей;
+- показ кандидатов и управление их статусами (избранное / черный список);
+- интеграцию с базой данных (создание таблиц, добавление пользователей, получение кандидатов);
+- хранение состояния последнего показанного кандидата для каждого пользователя.
+
+Использует функции из vk_bot_modules и db_modules.
+"""
+
+
 from vk_bot_modules import (
-    vk_bot,
     longpoll,
     VkEventType,
     send_message,
     create_keyboard,
-    get_user_info,
     user_last_candidate  # используем глобальное состояние из модуля
 )
 from db_modules import (
@@ -18,8 +29,18 @@ from db_modules import (
 
 def safe_add_to_status(vk_user_id: int, candidate_profile_id: int, status: str):
     """
-    Обёртка над add_to_status, которая преобразует внутренний ID профиля
-    в VK ID кандидата, как того требует текущая реализация add_to_status.
+    Добавляет статус (like/dislike) кандидату для пользователя, безопасно преобразуя
+    внутренний ID профиля в VK ID.
+
+    Обертка над функции add_to_status из db_modules.
+
+    Args:
+        vk_user_id (int): VK ID пользователя.
+        candidate_profile_id (int): Внутренний ID кандидата в таблице vk_profiles.
+        status (str): Статус для записи, "like" или "dislike".
+
+    Raises:
+        ValueError: Если профиль с указанным ID не найден в БД.
     """
     from db_connection import create_db_connection
     with create_db_connection() as conn:
@@ -33,6 +54,19 @@ def safe_add_to_status(vk_user_id: int, candidate_profile_id: int, status: str):
     add_to_status(vk_user_id, vk_candidate_id, status)
 
 def handle_message(event):
+    """
+    Обрабатывает входящее сообщение от пользователя VK.
+
+    В зависимости от текста сообщения выполняет:
+    - Приветствие и отправку клавиатуры;
+    - Показ следующего кандидата;
+    - Добавление кандидата в избранное или черный список;
+    - Вывод списка избранных;
+    - Сообщение о неизвестной команде.
+
+    Args:
+        event (VkEventType): Событие нового сообщения от VK LongPoll.
+    """
     user_id = event.user_id
     text = event.text.strip().lower()
 
@@ -113,6 +147,14 @@ def handle_message(event):
         )
 
 def main():
+    """
+    Главная функция запуска интеграционного бота.
+
+    Выполняет:
+    - Создание таблиц в базе данных;
+    - Прослушивание новых сообщений через VK LongPoll;
+    - Вызов handle_message для обработки каждого сообщения.
+    """
     print("Запуск интеграционного бота...")
     create_tables()  # создаём таблицы при старте
     print("Бот запущен и ожидает сообщений...")

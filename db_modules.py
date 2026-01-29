@@ -1,14 +1,33 @@
+"""
+Модуль работы с базой данных проекта VK Dating Bot.
+
+Содержит функции для:
+- создания таблиц базы данных PostgreSQL;
+- добавления и обновления пользователей и анкет VK;
+- хранения и получения фотографий пользователей;
+- получения следующего кандидата для показа;
+- управления статусами анкет (избранное / чёрный список);
+- получения списка избранных анкет.
+
+Модуль инкапсулирует всю бизнес-логику взаимодействия с БД
+и используется основным приложением и VK-ботом.
+"""
+
 from datetime import datetime, timezone
 
 from psycopg2.extras import RealDictCursor
 
 from db_connection import create_db_connection
-from vk_bot_modules import get_user_info, get_top3_photos_by_likes
+from vk_api_func import get_user_info, get_top3_photos_by_likes
 
 
 def create_tables():
     """
-    Создаёт таблицы в базе данных
+    Создает все необходимые таблицы в базе данных:
+    - vk_profiles — анкеты пользователей VK;
+    - users — локальные пользователи бота;
+    - vk_photos — фотографии анкет;
+    - like_dislike — статусы кандидатов (like/dislike).
     """
     with create_db_connection() as conn:
         with conn.cursor() as cur:
@@ -84,12 +103,19 @@ def create_tables():
 
             conn.commit()
 
-def add_user_to_db(user_id):
+def add_user_to_db(user_id: int) -> int:
     """
-    Добавляет пользователя в БД, если его еще нет.
-    user_id: ID пользователя ВК (int).
-    Использует get_user_info(user_id) и get_top3_photos_by_likes(user_id).
-    Возвращает id записи в users
+    Добавляет пользователя VK в базу данных, если он ещё не существует.
+
+    Args:
+        user_id (int): VK ID пользователя.
+
+    Returns:
+        int: Внутренний ID записи в таблице users.
+
+    Raises:
+        ValueError: Если пользователь VK не найден.
+        RuntimeError: Если не удалось вставить или обновить запись в vk_profiles.
     """
     user_info = get_user_info(user_id)
     if not user_info:
@@ -113,7 +139,8 @@ def add_user_to_db(user_id):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # 1) Вставить или обновить vk_profiles (UPSERT по vk_id)
             cur.execute("""
-                INSERT INTO vk_profiles (vk_id, first_name, last_name, sex, city_id, birth_date, profile_url, created_at, updated_at)
+                INSERT INTO vk_profiles (vk_id, first_name, last_name, sex, 
+                city_id, birth_date, profile_url, created_at, updated_at)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (vk_id) DO UPDATE
                     SET first_name = EXCLUDED.first_name,
@@ -168,10 +195,25 @@ def add_user_to_db(user_id):
 
     return user_db_id
 
-def get_next_candidate_from_db(user_id, last_id=None):
+def get_next_candidate_from_db(user_id: int, last_id: int | None = None) ->  dict | None:
     """
-    Берет следующего кандидата из БД, исключая профили из like_dislike данного пользователя.
-    Возвращает dict или None, если кандидат не найден.
+    Получает следующего кандидата для пользователя, исключая уже просмотренные анкеты
+    и те, что находятся в like_dislike.
+
+    Args:
+        user_id (int): VK ID пользователя.
+        last_id (int | None): Внутренний ID последнего показанного кандидата.
+
+    Returns:
+        dict | None: Данные кандидата:
+            {
+                "id": внутренний ID vk_profiles,
+                "first_name": имя,
+                "last_name": фамилия,
+                "vk_link": ссылка на профиль VK,
+                "photos": список до 3 фото для attachment
+            }
+        Возвращает None, если кандидатов нет.
     """
     with create_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -255,12 +297,28 @@ def get_next_candidate_from_db(user_id, last_id=None):
 
             return result
 
-def add_to_status(user_id, last_id, status):
+def add_to_status(user_id: int, last_id: int, status: str) -> dict:
     """
-    Добавляет или обновляет статус (like/dislike) для кандидата last_id от пользователя user_id.
-    user_id: VK id пользователя.
-    last_id: VK id кандидата в таблице vk_profiles.
-    status: 'like'|'dislike'.
+    Добавляет или обновляет статус (like/dislike) кандидата для пользователя.
+
+    Args:
+        user_id (int): VK ID пользователя.
+        last_id (int): VK ID кандидата в таблице vk_profiles.
+        status (str): "like" или "dislike".
+
+    Returns:
+        dict: Результат операции, например:
+            {
+                "ok": True,
+                "user_id": внутренний ID пользователя,
+                "vk_profiles_id": внутренний ID кандидата,
+                "like_dislike_id": ID записи в like_dislike,
+                "status": "like" или "dislike"
+            }
+
+    Raises:
+        ValueError: Если user_id, last_id или status не переданы, или профиль не найден.
+        RuntimeError: Если не удалось вставить/обновить запись в БД.
     """
 
     if not user_id:
@@ -339,11 +397,16 @@ def add_to_status(user_id, last_id, status):
                 "status": ld_row['status']
             }
 
-def get_favorites(user_id):
+def get_favorites(user_id: int) -> list[tuple[str, str, str]]:
     """
-    Возвращает список избранных профилей для пользователя user_id.
-    Формат результата: [(first_name, last_name, profile_url), ...]
-    Если пользователь не найден — возвращает пустой список.
+    Возвращает список избранных профилей пользователя.
+
+    Args:
+        user_id (int): VK ID пользователя.
+
+    Returns:
+        list[tuple[str, str, str]]: Список кортежей (first_name, last_name, profile_url).
+        Пустой список, если пользователь не найден или избранных нет.
     """
     if not user_id:
         return []

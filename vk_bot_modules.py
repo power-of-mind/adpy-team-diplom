@@ -1,3 +1,18 @@
+"""
+Модуль взаимодействия с VK API и логики работы бота VK Dating Bot.
+
+Функционал:
+- Авторизация через токен группы (бот) и пользовательский токен VK.
+- Получение информации о пользователях и их фотографий.
+- Формирование и отправка сообщений пользователю.
+- Создание клавиатуры VK.
+- Хранение состояния последнего показанного кандидата.
+- Основные функции запуска бота и обработки сообщений.
+
+Модуль инкапсулирует всю логику взаимодействия с VK API и
+используется вместе с модулем работы с базой данных.
+"""
+
 import os
 import vk_api
 
@@ -24,8 +39,16 @@ vk_bot_session = vk_api.VkApi(token=access_token_bot)
 vk_bot = vk_bot_session.get_api()
 longpoll = VkLongPoll(vk_bot_session)
 
-# Функция создания клавиатуры
+# Словарь для хранения последнего показанного кандидата для каждого пользователя
+user_last_candidate = {}
+
 def create_keyboard():
+    """
+    Создает клавиатуру для взаимодействия пользователя с ботом.
+
+    Returns:
+        str: JSON-код клавиатуры для VK API.
+    """
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("Следующий", VkKeyboardColor.PRIMARY)
     keyboard.add_button("В избранное", VkKeyboardColor.POSITIVE)
@@ -34,8 +57,16 @@ def create_keyboard():
     keyboard.add_button("Список избранных", VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
-# Функция отправки сообщений с кнопками
-def send_message(user_id, message, attachment=None, keyboard=None):
+def send_message(user_id: int, message: str, attachment: str = None, keyboard: str = None):
+    """
+    Отправляет сообщение пользователю VK с опциональной клавиатурой и вложениями.
+
+    Args:
+        user_id (int): VK ID пользователя.
+        message (str): Текст сообщения.
+        attachment (str, optional): Строка с фотографиями или медиа.
+        keyboard (str, optional): JSON-код клавиатуры VK.
+    """
     vk_bot.messages.send(
         user_id=user_id,
         message=message,
@@ -44,46 +75,30 @@ def send_message(user_id, message, attachment=None, keyboard=None):
         keyboard=keyboard
     )
 
-# Получение данных о пользователе
-def get_user_info(user_id):
-    user_info = vk_user.users.get(user_ids=user_id, fields="bdate,sex,city")[0]
-    return user_info
+def send_user_info(user_id: int, first_name: str, last_name: str, vk_link: str, photos: list[str]):
+    """
+    Отправляет пользователю информацию о кандидате.
 
-# Получение 3 самых популярных фотографий пользователя
-def get_top3_photos_by_likes(user_id):
-    photos = vk_user.photos.get(
-        owner_id=user_id,
-        album_id='profile',  # Альбом профиля
-        extended=1,          # Включает лайки
-        count=100            # Получаем 100 фото для выбора
-    )
-
-    # Сортируем по лайкам
-    sorted_photos = sorted(
-        photos['items'],
-        key=lambda x: x['likes']['count'],
-        reverse=True
-    )[:3]
-
-    attachments = []
-    for photo in sorted_photos:
-        max_size = max(photo['sizes'], key=lambda s: s['width'] * s['height'])
-        attachments.append(f"photo{photo['owner_id']}_{photo['id']}")  # Формат для attachment
-
-    return attachments
-
-# Отправка информации о кандидате пользователю
-def send_user_info(user_id, first_name, last_name, vk_link, photos):
+    Args:
+        user_id (int): VK ID пользователя.
+        first_name (str): Имя кандидата.
+        last_name (str): Фамилия кандидата.
+        vk_link (str): Ссылка на профиль кандидата.
+        photos (list[str]): Список фотографий кандидата.
+    """
     name = f"{first_name} {last_name}"
     profile_link = vk_link
     send_message(user_id, f"Имя: {name}\nСсылка на профиль: {profile_link}",
                  attachment=",".join([p for p in photos if p]),
                  keyboard=create_keyboard())
 
-# Словарь для хранения последнего показанного кандидата для каждого пользователя
-user_last_candidate = {}
-
 def start_bot():
+    """
+    Основной цикл бота VK LongPoll.
+
+    Обрабатывает события новых сообщений, добавляет пользователей в базу,
+    отвечает на команды пользователя и отправляет кандидатов с фото.
+    """
     print("Бот запущен...")
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
