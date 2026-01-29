@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from psycopg2.extras import RealDictCursor
 
 from db_connection import create_db_connection
-from vk_bot_modules import get_user_info, get_top3_photos_by_likes
+from vk_api_func import get_user_info, get_top3_photos_by_likes
 
 
 def create_tables():

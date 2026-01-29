@@ -2,11 +2,11 @@
 Модуль взаимодействия с VK API и логики работы бота VK Dating Bot.
 
 Функционал:
-- Авторизация через токен группы (бот) и пользовательский токен VK;
-- Получение информации о пользователях и их фотографий;
-- Формирование и отправка сообщений пользователю;
-- Создание клавиатуры VK;
-- Хранение состояния последнего показанного кандидата;
+- Авторизация через токен группы (бот) и пользовательский токен VK.
+- Получение информации о пользователях и их фотографий.
+- Формирование и отправка сообщений пользователю.
+- Создание клавиатуры VK.
+- Хранение состояния последнего показанного кандидата.
 - Основные функции запуска бота и обработки сообщений.
 
 Модуль инкапсулирует всю логику взаимодействия с VK API и
@@ -42,7 +42,7 @@ longpoll = VkLongPoll(vk_bot_session)
 # Словарь для хранения последнего показанного кандидата для каждого пользователя
 user_last_candidate = {}
 
-def create_keyboard() -> str:
+def create_keyboard():
     """
     Создает клавиатуру для взаимодействия пользователя с ботом.
 
@@ -74,50 +74,6 @@ def send_message(user_id: int, message: str, attachment: str = None, keyboard: s
         attachment=attachment,
         keyboard=keyboard
     )
-
-def get_user_info(user_id: int) -> dict:
-    """
-    Получает информацию о пользователе VK.
-
-    Args:
-        user_id (int): VK ID пользователя.
-
-    Returns:
-        dict: Словарь с данными пользователя (id, first_name, last_name, sex, city, bdate и др.).
-    """
-    user_info = vk_user.users.get(user_ids=user_id, fields="bdate,sex,city")[0]
-    return user_info
-
-def get_top3_photos_by_likes(user_id: int) -> list[str]:
-    """
-    Получает 3 самых популярных фотографии пользователя VK по количеству лайков.
-
-    Args:
-        user_id (int): VK ID пользователя.
-
-    Returns:
-        list[str]: Список attachment-строк для VK API вида 'photo<owner_id>_<id>'.
-    """
-    photos = vk_user.photos.get(
-        owner_id=user_id,
-        album_id='profile',  # Альбом профиля
-        extended=1,          # Включает лайки
-        count=100            # Получаем 100 фото для выбора
-    )
-
-    # Сортируем по лайкам
-    sorted_photos = sorted(
-        photos['items'],
-        key=lambda x: x['likes']['count'],
-        reverse=True
-    )[:3]
-
-    attachments = []
-    for photo in sorted_photos:
-        max_size = max(photo['sizes'], key=lambda s: s['width'] * s['height'])
-        attachments.append(f"photo{photo['owner_id']}_{photo['id']}")  # Формат для attachment
-
-    return attachments
 
 def send_user_info(user_id: int, first_name: str, last_name: str, vk_link: str, photos: list[str]):
     """

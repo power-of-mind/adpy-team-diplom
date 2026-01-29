@@ -30,7 +30,8 @@
 project/
 │
 ├── main.py                # Точка входа, обработка сообщений
-├── vk_bot_modules.py      # Работа с VK API, клавиатура, отправка сообщений
+├── vk_bot_modules.py      # Модуль с основными функциями бота
+├── vk_api_func.py         # Модуль для работы с VK API
 ├── db_modules.py          # Вся бизнес‑логика работы с БД
 ├── db_connection.py       # Подключение к PostgreSQL
 ├── scheme.png             # Схема базы данных
